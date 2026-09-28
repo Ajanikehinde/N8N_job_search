@@ -1,0 +1,1286 @@
+{
+  "name": "AI Job Hunter - Approval Auto Apply System",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "hour": 7
+            },
+            {}
+          ]
+        }
+      },
+      "id": "97c7a645-f851-464e-95fe-3475ce8cd1b2",
+      "name": "Daily 7AM Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -30240,
+        3088
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://boards-api.greenhouse.io/v1/boards/{{$json.slug}}/jobs?content=true",
+        "options": {}
+      },
+      "id": "fc3221b3-29fb-4b3b-9d7a-0f6ead169b54",
+      "name": "Fetch Greenhouse API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        -29360,
+        3008
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4c172b14-7c81-485e-8de6-5ae8c3dcc2f1",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "number"
+            },
+            {
+              "id": "44729502-a763-4e4e-87db-e6ab69e5aeb6",
+              "name": "internal_job_id",
+              "value": "={{ $json.internal_job_id }}",
+              "type": "number"
+            },
+            {
+              "id": "d2755e03-4a71-42cb-8cb6-a9d4c22f0bfb",
+              "name": "title",
+              "value": "={{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "c68e0e06-02c4-4f6e-a505-3f0d4d969eef",
+              "name": "company_name",
+              "value": "={{ $json.company_name }}",
+              "type": "string"
+            },
+            {
+              "id": "a7aab633-5481-436e-bf25-a7aaddf18504",
+              "name": "location",
+              "value": "={{$json.location.name}}",
+              "type": "string"
+            },
+            {
+              "id": "55525168-6e69-4ee7-95ee-9ca36bdb79b1",
+              "name": "workplace_type",
+              "value": "={{\n$json.metadata.find(\nm => m.name === \"Workplace Type\"\n)?.value\n}}",
+              "type": "string"
+            },
+            {
+              "id": "60e14486-abe6-48f1-bf27-3e0432c8f34a",
+              "name": "language",
+              "value": "={{ $json.language }}",
+              "type": "string"
+            },
+            {
+              "id": "7ca1185b-1dd0-43f4-8c85-e5d6e38b7f4e",
+              "name": "=published_at",
+              "value": "={{ $json.first_published }}",
+              "type": "string"
+            },
+            {
+              "id": "c71556c8-3eda-4984-aa6f-f8b62e87f310",
+              "name": "=updated_at",
+              "value": "={{ $json.updated_at }}",
+              "type": "string"
+            },
+            {
+              "id": "4abcc007-d48f-4ba4-b087-9f519ef49392",
+              "name": "=url",
+              "value": "={{ $json.absolute_url }}",
+              "type": "string"
+            },
+            {
+              "id": "883859a9-9b68-4f98-bd19-63e67c299ffb",
+              "name": "=source",
+              "value": "Greenhouse",
+              "type": "string"
+            },
+            {
+              "id": "50599460-a49e-48a2-bc91-e5d0c3f3a56f",
+              "name": "=ats",
+              "value": "=greenhouse",
+              "type": "string"
+            },
+            {
+              "id": "39fcde5c-f6cd-441f-a3c3-665fb77e1686",
+              "name": "Content",
+              "value": "={{ $json.content }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -28688,
+        3008
+      ],
+      "id": "7e35f191-6069-44b8-b706-4304b7e8e0ee",
+      "name": "Normalize Greenhouse Fields"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "jobs",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -29136,
+        3008
+      ],
+      "id": "f84059c2-9ba9-481d-916d-ed13c39a9ca8",
+      "name": "Split Greenhouse Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.filter(item => {\n  const title = (item.json.title || \"\").toLowerCase();\n  const location = (item.json.location || \"\").toLowerCase();\n\n  const keywords = [\n    \"data\",\n    \"analyst\",\n    \"analytics\",\n    \"engineer\",\n    \"machine learning\",\n    \"ml\",\n    \"ai\",\n    \"data engineer\",\n    \"data scientist\",\n    \"backend\",\n    \"platform\",\n    \"security\",\n    \"cyber\"\n  ];\n\n  const match = keywords.some(k => title.includes(k));\n\n  const geoBoost =\n    location.includes(\"remote\") ||\n    location.includes(\"united kingdom\") ||\n    location.includes(\"europe\");\n\n  return match || geoBoost;\n}).map(i => ({ json: i.json }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -28432,
+        3088
+      ],
+      "id": "116ddfdb-28ed-4e04-8118-9f6953bb27ec",
+      "name": "Keyword Filter"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const job = item.json;\n\n  let score = 0;\n  const title = (job.title || \"\").toLowerCase();\n  const location = (job.location || \"\").toLowerCase();\n\n  // Role relevance\n  if (title.includes(\"data engineer\")) score += 10;\n  if (title.includes(\"data scientist\")) score += 10;\n  if (title.includes(\"analyst\")) score += 8;\n  if (title.includes(\"machine learning\")) score += 9;\n  if (title.includes(\"ai\")) score += 7;\n  if (title.includes(\"platform\")) score += 5;\n  if (title.includes(\"security\")) score += 6;\n\n  // Location boost\n  if (location.includes(\"remote\")) score += 5;\n  if (location.includes(\"united kingdom\")) score += 6;\n  if (location.includes(\"europe\")) score += 4;\n\n  // Company bonus (optional)\n  if (job.company_name === \"Airbnb\") score += 2;\n\n  return {\n    json: {\n      ...job,\n      score\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -28224,
+        3088
+      ],
+      "id": "649980c9-a925-4a34-a01b-45ecdec49ddd",
+      "name": "Score Jobs"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sorted = items\n  .sort((a, b) => b.json.score - a.json.score)\n  .slice(0, 15);\n\nreturn sorted;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -28016,
+        3088
+      ],
+      "id": "d1c35e74-2176-4f32-b247-3cf112cb9151",
+      "name": "Sort and Top 15"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const j = item.json;\n\n  return {\n    json: {\n      title: j.title,\n      company: j.company_name,\n      location: j.location,\n      score: j.score,\n      url: j.url,\n      published_at: j.published_at,\n      insight: `This role matches your data/AI profile with score ${j.score}`\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -27744,
+        3184
+      ],
+      "id": "c7b296c5-eca9-4ee7-916c-0dc6165889ed",
+      "name": "Reshape Output"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_JOB_CRM_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {
+            "title": "={{ $json.title }}",
+            "company": "={{ $json.company }}",
+            "location": "={{ $json.location }}",
+            "score": "={{ $json.score }}",
+            "url": "={{ $json.url }}",
+            "published_at": "={{ $json.published_at }}",
+            "status": "New"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -27040,
+        2848
+      ],
+      "id": "8c45e696-9caf-4f83-bda4-3ce9e786a76b",
+      "name": "Log to Sheets",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "YOUR_NOTION_DATABASE_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_JOB_CRM_DATABASE",
+          "cachedResultUrl": "https://www.notion.so/YOUR_NOTION_DATABASE_ID"
+        },
+        "title": "={{$json.title}}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Company|rich_text",
+              "textContent": "={{ $json.company }}"
+            },
+            {
+              "key": "Location|rich_text",
+              "textContent": "={{ $json.location }}"
+            },
+            {
+              "key": "Published|date",
+              "date": "={{ $json.published_at }}"
+            },
+            {
+              "key": "Score|number",
+              "numberValue": "={{ $json.score }}"
+            },
+            {
+              "key": "Status|status",
+              "statusValue": "NEW"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "Company site"
+            },
+            {
+              "key": "URL|url",
+              "urlValue": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -27040,
+        3024
+      ],
+      "id": "1e2310e2-12f7-4f59-bc91-2029d2e04ffe",
+      "name": "Log to Notion",
+      "credentials": {
+        "notionApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = items;\n\nlet body = `\n<h2>🔥 Daily AI/Data Opportunities</h2>\n\n<p>Hello Applicant,</p>\n\n<p>Here are today's highest-scoring jobs.</p>\n\n<hr>\n`;\n\njobs.forEach((item, index) => {\n\n    const job = item.json;\n\n    body += `\n    <h3>${index + 1}. ${job.title}</h3>\n\n    <b>🏢 Company:</b> ${job.company}<br>\n\n    <b>📍 Location:</b> ${job.location}<br>\n\n    <b>⭐ Relevance Score:</b> ${job.score}<br>\n\n    <b>📅 Published:</b> ${job.published_at}<br>\n\n    <p>\n      <a href=\"${job.url}\">👉 Apply Here</a>\n    </p>\n\n    <hr>\n    `;\n});\n\nbody += `\n<p><b>Total Jobs:</b> ${jobs.length}</p>\n\n<p>Generated automatically by your AI Job Hunter.</p>\n`;\n\nreturn [\n{\njson:{\nsubject:`🔥 Daily AI/Data Opportunities (${jobs.length} Jobs)`,\nbody\n}\n}\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -27024,
+        3184
+      ],
+      "id": "a33e91eb-4573-4658-9191-9c033de366d0",
+      "name": "Build Digest Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -26752,
+        3184
+      ],
+      "id": "c830c0fc-8525-4ae1-895d-dd0f29bb74fb",
+      "name": "Send Digest Email",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const companies = [\n  { company: \"Airbnb\", ats: \"greenhouse\" },\n  { company: \"Anthropic\", ats: \"greenhouse\" },\n  { company: \"OpenAI\", ats: \"ashby\" },\n  { company: \"Stripe\", ats: \"greenhouse\" }\n];\n\nreturn companies.map(c => {\n  return {\n    json: {\n      ...c,\n      slug: c.company.toLowerCase(),\n      mode: \"HTTP_API\"\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -29920,
+        3088
+      ],
+      "id": "0335d7f8-435d-438a-8abb-8952dbf8a092",
+      "name": "Seed Companies"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3ee11aec-2351-481b-bb46-21770fc84819",
+                    "leftValue": "={{ $json.ats }}",
+                    "rightValue": "=greenhouse",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "7a4451bd-c3df-44ef-8944-10fb16b47424",
+                    "leftValue": "={{ $json.ats }}",
+                    "rightValue": "=ashby",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        -29648,
+        3088
+      ],
+      "id": "7929fd79-34bd-4fba-8bdf-fa3f0fd3a2b7",
+      "name": "Route by ATS"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.ashbyhq.com/posting-api/job-board/{{ $json.slug }}?includeCompensation=true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -29376,
+        3168
+      ],
+      "id": "ed3c3a0e-c384-4afc-a5ad-e83085b15bc0",
+      "name": "Fetch Ashby API"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "jobs",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -29136,
+        3168
+      ],
+      "id": "ba122278-4e62-491a-90fa-87bbcda3f5f6",
+      "name": "Split Ashby Jobs"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ashby-1",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "ashby-2",
+              "name": "title",
+              "value": "={{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "ashby-3",
+              "name": "company_name",
+              "value": "={{ $items(\"Route by ATS\", 1)[0].json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "ashby-4",
+              "name": "location",
+              "value": "={{ $json.location }}",
+              "type": "string"
+            },
+            {
+              "id": "ashby-5",
+              "name": "published_at",
+              "value": "={{ $json.publishedAt }}",
+              "type": "string"
+            },
+            {
+              "id": "ashby-6",
+              "name": "url",
+              "value": "={{ $json.applyUrl }}",
+              "type": "string"
+            },
+            {
+              "id": "ashby-7",
+              "name": "source",
+              "value": "Ashby",
+              "type": "string"
+            },
+            {
+              "id": "ashby-8",
+              "name": "ats",
+              "value": "ashby",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -28672,
+        3168
+      ],
+      "id": "68320569-d520-4d06-a3db-5bdceb415b5e",
+      "name": "Normalize Ashby Fields"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_JOB_CRM_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_GOOGLE_SHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "title": "={{ $json.title }}",
+            "company": "={{ $json.company_name }}",
+            "location": "={{ $json.location }}",
+            "score": "={{ $json.score }}",
+            "url": "={{ $json.url }}",
+            "published_at": "={{ $json.published_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -27744,
+        3040
+      ],
+      "id": "aaa5ed08-b2b5-43ef-af51-240af80b2086",
+      "name": "Fetch Existing URLs",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "1bef2c83-f6d7-46a6-a653-2f9efa816ea6",
+      "name": "Merge Jobs and Existing",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -27504,
+        3104
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\n\nconst existingUrls = new Set();\nconst newJobs = [];\n\nfor (const item of allItems) {\n\n    if (item.json.title) {\n        newJobs.push(item);\n    } else if (item.json.url) {\n        existingUrls.add(item.json.url);\n    }\n\n}\n\nreturn newJobs.filter(job => !existingUrls.has(job.json.url));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -27312,
+        3104
+      ],
+      "id": "15fd039c-458f-4671-ad62-a53106d97381",
+      "name": "Remove Duplicates",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 2,
+      "position": [
+        -27040,
+        3376
+      ],
+      "id": "0bd1a991-902c-40ee-b5fd-da804320ada0",
+      "name": "Loop Per Job"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "YOUR_EMAIL@example.com",
+        "subject": "=Approve Application: {{ $json.title }} @ {{ $json.company }}",
+        "message": "=<h2>📌 Job Approval Request</h2>\n\n<p>Hello Kehinde,</p>\n\n<p>The AI Job Hunter has found a job that matches the configured job-relevance rules and is awaiting your approval.</p>\n\n<hr>\n\n<h3>Job Details</h3>\n\n<b>Position:</b> {{ $json.title }}<br>\n<b>Company:</b> {{ $json.company }}<br>\n<b>Location:</b> {{ $json.location }}<br>\n<b>Relevance Score:</b> {{ $json.score }}<br>\n<b>Employment Type:</b> {{ $json.employment_type }}<br>\n<b>Posted:</b> {{ $json.posted_at }}<br>\n\n<p>\n<b>Job Link:</b><br>\n<a href=\"{{ $json.url }}\">{{ $json.url }}</a>\n</p>\n\n<hr>\n\n<h3>AI Recommendation</h3>\n\n<p>\nThis opportunity was selected because it matches your interests in Data Science, Data Engineering, AI, Machine Learning, Cloud Computing, and Cybersecurity.\n</p>\n\n<p>\nPlease review the job description before making your decision.\n</p>\n\n<hr>\n\n<p><b>Reply with one of the following:</b></p>\n\n<ul>\n<li>✅ APPROVE</li>\n<li>❌ REJECT</li>\n</ul>\n\n<p>\nIf approved, the workflow will automatically continue to prepare and submit your application.\n</p>\n\n<p>Regards,<br>\n<b>DecisionLens AI Job Hunter</b><br>\nAutomated Job Approval System</p>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -26816,
+        3376
+      ],
+      "id": "8c1bd88c-af2b-4b67-8951-e76603977108",
+      "name": "Email Approval Request",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "approval-check-1",
+              "leftValue": "={{ $json.approvalStatus }}",
+              "rightValue": "=approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -26592,
+        3376
+      ],
+      "id": "7a8f9f59-8fcf-43bc-9c05-93b1cf897ef6",
+      "name": "Check Approval Response"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://127.0.0.1:11434/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "ollamaApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"llama3:8b\",\n  \"messages\": [\n    {\"role\": \"system\", \"content\": \"Write a tailored cover letter for a job application. Keep it professional, three paragraphs, highlighting data, AI, cloud, and analytics skills.\"},\n    {\"role\": \"user\", \"content\": \"Job title: {{ $('Loop Per Job').item.json.title }}\\nCompany: {{ $('Loop Per Job').item.json.company }}\\nDescription: {{ $('Loop Per Job').item.json.content }}\\n\\nWrite a professional cover letter.\"}\n  ],\n  \"temperature\": 0.7,\n  \"stream\": false\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -26368,
+        3376
+      ],
+      "id": "185e08bc-aa69-4452-8b43-90aa79a38a23",
+      "name": "LLM Cover Letter",
+      "credentials": {
+        "ollamaApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://127.0.0.1:3001/submit-application",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": {{ JSON.stringify($('Loop Per Job').item.json.url) }},\n  \"title\": {{ JSON.stringify($('Loop Per Job').item.json.title) }},\n  \"company\": {{ JSON.stringify($('Loop Per Job').item.json.company) }},\n  \"coverLetter\": {{ JSON.stringify($json.choices[0].message.content) }},\n  \"resumeUrl\": \"YOUR_RESUME_URL\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        -26160,
+        3376
+      ],
+      "id": "bba68682-3ffd-4d32-bd00-361a921f98a5",
+      "name": "Playwright Submit"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_SUBMISSION_LOG_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_SUBMISSION_LOG_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SUBMISSION_LOG_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/YOUR_SUBMISSION_LOG_SHEET_ID/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "title": "={{ $json.title }}",
+            "company": "={{ $json.company }}",
+            "location": "={{ $json.location }}",
+            "score": "={{ $json.score }}",
+            "url": "={{ $json.url }}",
+            "published_at": "={{ $json.published_at }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "score",
+              "displayName": "score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "published_at",
+              "displayName": "published_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -25920,
+        3408
+      ],
+      "id": "2d5199e1-63e9-4a3a-a531-6b094277fa34",
+      "name": "Log Submission Result",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "YOUR_CREDENTIAL_NAME"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "maxItems": 100
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -28896,
+        3008
+      ],
+      "id": "27ce5ce3-cd42-49cf-9d45-c52537b26f34",
+      "name": "Limit Greenhouse"
+    },
+    {
+      "parameters": {
+        "maxItems": 100
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        -28912,
+        3168
+      ],
+      "id": "df35e9d2-2081-4867-8211-14f0fcf29673",
+      "name": "Limit Ashby"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Daily 7AM Trigger": {
+      "main": [
+        [
+          {
+            "node": "Seed Companies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Seed Companies": {
+      "main": [
+        [
+          {
+            "node": "Route by ATS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by ATS": {
+      "main": [
+        [
+          {
+            "node": "Fetch Greenhouse API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch Ashby API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Greenhouse API": {
+      "main": [
+        [
+          {
+            "node": "Split Greenhouse Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Greenhouse Jobs": {
+      "main": [
+        [
+          {
+            "node": "Limit Greenhouse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit Greenhouse": {
+      "main": [
+        [
+          {
+            "node": "Normalize Greenhouse Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Greenhouse Fields": {
+      "main": [
+        [
+          {
+            "node": "Keyword Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Ashby API": {
+      "main": [
+        [
+          {
+            "node": "Split Ashby Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Ashby Jobs": {
+      "main": [
+        [
+          {
+            "node": "Limit Ashby",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit Ashby": {
+      "main": [
+        [
+          {
+            "node": "Normalize Ashby Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Ashby Fields": {
+      "main": [
+        [
+          {
+            "node": "Keyword Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keyword Filter": {
+      "main": [
+        [
+          {
+            "node": "Score Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Jobs": {
+      "main": [
+        [
+          {
+            "node": "Sort and Top 15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sort and Top 15": {
+      "main": [
+        [
+          {
+            "node": "Reshape Output",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch Existing URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Existing URLs": {
+      "main": [
+        [
+          {
+            "node": "Merge Jobs and Existing",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Reshape Output": {
+      "main": [
+        [
+          {
+            "node": "Merge Jobs and Existing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Jobs and Existing": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Log to Sheets",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log to Notion",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Digest Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Per Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Digest Email": {
+      "main": [
+        [
+          {
+            "node": "Send Digest Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Per Job": {
+      "main": [
+        [
+          {
+            "node": "Email Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Check Approval Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Approval Response": {
+      "main": [
+        [
+          {
+            "node": "LLM Cover Letter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Per Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LLM Cover Letter": {
+      "main": [
+        [
+          {
+            "node": "Playwright Submit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Playwright Submit": {
+      "main": [
+        [
+          {
+            "node": "Log Submission Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Submission Result": {
+      "main": [
+        [
+          {
+            "node": "Loop Per Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false,
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "PUBLIC_WORKFLOW_PLACEHOLDER",
+  "meta": {},
+  "id": "PUBLIC_WORKFLOW_PLACEHOLDER",
+  "tags": []
+}
